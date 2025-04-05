@@ -2,6 +2,11 @@
 
 [English](README.md) | [中文](README_zh.md)
 
+## Video Demonstration
+Check out our demo video:
+
+[![AquaAgent Demo](https://i2.hdslb.com/bfs/archive/57aa4aaa9589a5a0ce2e4a2bbb17b5a43a04a8c9.jpg@672w_378h_1c_!web-search-common-cover.webp)](https://www.bilibili.com/video/BV19dRRYxEVz/?spm_id_from=333.40138.top_right_bar_window_history.content.click&vd_source=3ae379e8d4340c9697c1c7fad67f81c8)
+
 ## Installation and Running Guide
 
 ### 1. Create Conda Environment
