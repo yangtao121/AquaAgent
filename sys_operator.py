@@ -9,6 +9,7 @@ agent = SystemOperationAgent()
 
 
 agent.chat()
+# 卸载lightgdm界面，换成ubuntu默认的gonme
 
 
 
