@@ -1,0 +1,29 @@
+LLMs:
+  common:
+    type: "ollama"
+    params:
+      model: "qwen2.5:72b"
+      base_url: "http://localhost:11434"
+      num_predict: 40960
+      num_ctx: 40960
+
+Tools:
+  SSH_Tool:
+    name: "SSH_Tool"
+    pre_execute: ls # 预执行命令
+    params:
+      host: YOUR_HOST # 主机地址
+      port: YOUR_PORT # 端口
+      username: YOUR_USERNAME # 用户名
+      password: YOUR_PASSWORD # 密码
+      debug_mode: false # 调试模式
+    
+  Web_Scrape_Tool:
+    name: "ObtainWebContentTool"
+    
+  Web_Search_Tool:
+    name: "SearxSearchTool"
+    params:
+      searx_host: YOUR_SEARX_HOST # 搜索引擎地址
+    
+    

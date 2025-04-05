@@ -1,0 +1,28 @@
+LLMs:
+  common:
+    type: "openai"
+    params:
+      model: "deepseek-chat"
+      api_key: YOUR_DEEPSEEK_API_KEY # DeepSeek API 密钥
+      base_url: "https://api.deepseek.com/v1"
+      max_tokens: 8192
+      max_retries: 3
+    # 可以使用其他LLM
+
+Tools:
+  SSH_Tool:
+    name: "SSH_Tool"
+    pre_execute: ls # 预执行命令
+    params:
+      host: YOUR_HOST # 主机地址
+      port: YOUR_PORT # 端口
+      username: YOUR_USERNAME # 用户名
+      password: YOUR_PASSWORD # 密码
+      debug_mode: false # 调试模式
+  Web_Tool:
+    name: "ObtainWebContentTool"
+    
+  Web_Search_Tool:
+    name: "TavilySearchTool"
+    params:
+      tavily_api_key: YOUR_TAVILY_API_KEY # Tavily API 密钥
