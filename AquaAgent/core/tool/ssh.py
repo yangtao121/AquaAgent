@@ -120,7 +120,16 @@ class SSHTool(BaseTool):
         r'[a-f0-9]+: Download complete',        # Docker layer download completion
         r'[a-f0-9]+: Extracting',               # Docker layer extraction
         r'[a-f0-9]+: Pull complete',            # Docker layer pull completion
-        r'Pulling from'                         # Docker repository pull indicator
+        r'Pulling from',                        # Docker repository pull indicator
+        # Git specific progress markers
+        r'(remote:\s+)?Counting objects:',      # Git clone counting objects
+        r'(remote:\s+)?Compressing objects:',   # Git clone compressing objects 
+        r'(remote:\s+)?Receiving objects:',     # Git clone receiving objects
+        r'(remote:\s+)?Resolving deltas:',      # Git clone resolving deltas
+        r'remote: Finding sources',             # GitHub finding sources
+        r'remote: Finding sources',             # GitHub finding sources
+        r'Unpacking objects:',                  # Git clone unpacking objects
+        r'Checking out files:'                  # Git checkout progress
     ]
     
     def __init__(self,
@@ -234,7 +243,7 @@ class SSHTool(BaseTool):
     def _run(self,
              command: str,
              reset_ssh: bool = False,
-             tail_lines: int = 10,
+             tail_lines: int = 100,
              )->str:
         """
         执行远程命令
@@ -257,21 +266,50 @@ class SSHTool(BaseTool):
         is_sudo_command = 'sudo ' in command
         # 检查是否是下载或安装命令
         is_download_command = any(keyword in command.lower() for keyword in 
-                               ['apt', 'apt-get', 'yum', 'dnf', 'pip', 'conda', 'npm', 'wget', 'curl', 'install', 'update', 'upgrade'])
+                               ['apt', 'apt-get', 'yum', 'dnf', 'pip', 'conda', 'npm', 'wget', 'curl', 'install', 'update', 'upgrade', 'git', 'clone'])
         # 检查是否是apt-get update命令
         is_apt_update = 'apt-get update' in command or 'apt update' in command
+        # 检查是否是docker logs -f命令
+        is_docker_logs_follow = 'docker logs -f' in command or 'docker logs --follow' in command
         
         if is_sudo_command:
             self._logger.info("检测到sudo命令，使用特殊处理逻辑")
-            timeout = 900  # 超时时间增加为900秒
+            timeout = 30  # 超时时间增加为900秒
         elif is_apt_update:
             self._logger.info("检测到apt-get update命令，使用特殊处理逻辑")
-            timeout = 1200  # apt-get update命令使用更长的超时时间
+            timeout = 30  # apt-get update命令使用更长的超时时间
         elif is_download_command:
             self._logger.info("检测到可能的下载或安装命令，增加超时时间")
-            timeout = 600  # 下载命令使用更长的超时时间
+            timeout = 30  # 下载命令使用更长的超时时间
         else:
-            timeout = 60  # 超时时间增加为60秒
+            timeout = 30  # 超时时间增加为60秒
+            
+        # 对于docker logs -f命令，使用特殊处理
+        if is_docker_logs_follow:
+            self._logger.info("检测到docker logs -f命令，等待1秒后立即返回结果")
+            # 发送命令前先清空缓冲区
+            if self._channel.recv_ready():
+                buffer_content = self._channel.recv(65535).decode('utf-8', errors='replace')
+                
+            # 发送命令
+            self._channel.send(command + '\n')
+            
+            # 等待1秒
+            time.sleep(1)
+            
+            # 读取所有可用输出
+            output = ""
+            while self._channel.recv_ready():
+                part = self._channel.recv(65535).decode('utf-8', errors='replace')
+                output += part
+            
+            # 如果需要限制行数，只保留最后的tail_lines行
+            if tail_lines > 0 and output:
+                lines = output.splitlines()
+                if len(lines) > tail_lines:
+                    output = '\n'.join(lines[-tail_lines:])
+                
+            return output
             
         # 默认应用优化设置
         result = self.execute_interactive_command(
@@ -365,7 +403,7 @@ class SSHTool(BaseTool):
             self._interactive_mode = False
             return False
         
-    def execute_interactive_command(self, command, blocking=True, timeout=120, buffer_size=65535, tail_lines=0, debug_mode=None):
+    def execute_interactive_command(self, command, blocking=True, timeout=30, buffer_size=65535, tail_lines=0, debug_mode=None):
         """
         在交互式会话中执行命令
         
@@ -404,30 +442,33 @@ class SSHTool(BaseTool):
             # 检查是否是Docker pull命令
             is_docker_pull = 'docker pull ' in command
             
+            # 检查是否是Docker logs -f命令
+            is_docker_logs_follow = 'docker logs -f' in command or 'docker logs --follow' in command
+            
             # 检查是否是下载或安装命令
             is_download_command = any(keyword in command.lower() for keyword in 
-                               ['apt', 'apt-get', 'yum', 'dnf', 'pip', 'conda', 'npm', 'wget', 'curl', 'install', 'update', 'upgrade', 'pull'])
+                               ['apt', 'apt-get', 'yum', 'dnf', 'pip', 'conda', 'npm', 'wget', 'curl', 'install', 'update', 'upgrade', 'git', 'clone'])
             
             if is_sudo_command:
                 self._logger.info("检测到sudo命令，使用特殊处理逻辑")
-                timeout = 900  # 超时时间增加为900秒
+                timeout = 30  # 超时时间增加为900秒
             elif is_docker_pull:
                 self._logger.info("检测到docker pull命令，使用特殊处理逻辑")
-                timeout = 3600  # Docker pull命令使用更长的超时时间 (1小时)
+                timeout = 30  # Docker pull命令使用更长的超时时间 (1小时)
             elif is_docker_command:
                 self._logger.info("检测到docker命令，使用特殊处理逻辑") 
-                timeout = 1800  # Docker命令使用更长的超时时间 (30分钟)
+                timeout = 30  # Docker命令使用更长的超时时间 (30分钟)
             elif is_apt_command:
                 self._logger.info("检测到apt命令，使用特殊处理逻辑")
-                timeout = 900  # apt命令使用更长的超时时间
+                timeout = 30  # apt命令使用更长的超时时间
             elif is_conda_command:
                 self._logger.info("检测到conda命令，使用特殊处理逻辑")
-                timeout = 1200  # conda命令使用更长的超时时间
+                timeout = 30  # conda命令使用更长的超时时间
             elif is_download_command:
                 self._logger.info("检测到可能的下载或安装命令，增加超时时间")
-                timeout = 600  # 下载命令使用更长的超时时间
+                timeout = 30  # 下载命令使用更长的超时时间
             else:
-                timeout = 60  # 超时时间增加为60秒
+                timeout = 30  # 超时时间增加为60秒
             
             # 发送命令前先清空缓冲区
             if self._channel.recv_ready():
@@ -437,6 +478,26 @@ class SSHTool(BaseTool):
             # 发送命令
             self._logger.info(f"开始执行命令: {command}")
             self._channel.send(command + '\n')
+            
+            # 对于docker logs -f命令，只等待短暂时间获取最新日志
+            if is_docker_logs_follow and not blocking:
+                self._logger.info("docker logs -f命令，短暂等待获取最新日志")
+                time.sleep(2)  # 等待2秒以获取初始日志输出
+                output = ""
+                while self._channel.recv_ready():
+                    part = self._channel.recv(buffer_size).decode('utf-8', errors='replace')
+                    output += part
+                
+                # 发送Ctrl+C中断日志跟踪
+                self._channel.send('\x03')  # 发送Ctrl+C
+                time.sleep(0.5)  # 等待命令终止
+                
+                # 如果需要截取最后几行
+                if tail_lines > 0 and output:
+                    output_lines = output.splitlines()
+                    output = '\n'.join(output_lines[-tail_lines:])
+                    
+                return output
             
             # 增加延迟以避免立即触发命令完成检测，尤其是对于长时间运行的命令
             time.sleep(2)
@@ -460,6 +521,7 @@ class SSHTool(BaseTool):
                 sudo_password_sent = False  # 跟踪是否已发送密码
                 pager_detected = False  # 跟踪是否检测到分页器
                 interactive_prompt_detected = False  # 跟踪是否检测到交互式提示
+                activity_detected = False  # 初始化活动检测变量
                 
                 # 特征检测 - 用于Docker容器中的特殊情况
                 known_prompts = self._known_prompts
@@ -935,20 +997,20 @@ class SSHTool(BaseTool):
             is_sudo_command = 'sudo ' in command
             # 检查是否是下载或安装命令
             is_download_command = any(keyword in command.lower() for keyword in 
-                                   ['apt', 'apt-get', 'yum', 'dnf', 'pip', 'conda', 'npm', 'wget', 'curl', 'install', 'update', 'upgrade'])
+                                   ['apt', 'apt-get', 'yum', 'dnf', 'pip', 'conda', 'npm', 'wget', 'curl', 'install', 'update', 'upgrade', 'git', 'clone'])
             
             # 检查是否是apt相关命令
             is_apt_command = any(apt_cmd in command for apt_cmd in ['apt-get', 'apt'])
             
             if is_sudo_command:
                 self._logger.info("流式命令中检测到sudo命令，使用特殊处理逻辑")
-                timeout = 900  # 超时时间
+                timeout = 30  # 超时时间
             elif is_apt_command:
                 self._logger.info("流式命令中检测到apt命令，使用特殊处理逻辑")
-                timeout = 900  # apt命令使用更长的超时时间
+                timeout = 30  # apt命令使用更长的超时时间
             elif is_download_command:
                 self._logger.info("流式命令中检测到可能的下载或安装命令，增加超时时间")
-                timeout = 1800  # 下载命令使用更长的超时时间
+                timeout = 30  # 下载命令使用更长的超时时间
             
             # 发送命令前先清空缓冲区
             if self._channel.recv_ready():
@@ -1357,13 +1419,14 @@ if __name__ == "__main__":
                       format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
     # ssh_tool = SSHTool(host="192.168.5.54", username="AquaTao", password="nl@YTno.1", debug_mode=True)
-    ssh_tool = SSHTool(host="192.168.5.248", username="ai-server", password="dyy520")
+    ssh_tool = SSHTool(host="192.168.5.85", username="aqualab", password="dyy520")
 
     ssh_tool.init_ssh()
     # ssh_tool.add_pre_execute_command('docker exec -it a96ab3432739 /bin/bash')
     # ssh_tool.pre_execute()
     
-    ssh_tool.execute_interactive_command('sudo apt update && sudo apt install -y ')
+    result = ssh_tool._run(' docker logs -f ragflow-server')
+    print(result)
     
     # ssh_tool.execute_interactive_command('conda create -n test python=3.10')
     

@@ -9,7 +9,7 @@ agent = SystemOperationAgent()
 
 
 agent.chat()
-# 卸载lightgdm界面，换成ubuntu默认的gonme
+# 在这台电脑上部署ragflow，注意小心操作, 参考网站https://github.com/infiniflow/ragflow，需要关闭什么服务，端口冲突错误，不要自行处理
 
 
 
